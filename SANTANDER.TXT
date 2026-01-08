@@ -1,0 +1,76 @@
+URL DIRECIONADA DIRETO PARA SELELÃO DE PESSOA FISICA/JURIDICA:
+https://www.cliente.santanderfinanciamentos.com.br/originacaocliente/?int_source=portalSF&int_medium=c2c&int_campaign=simular-agora&mathts=paid&gad_source=1&gclid=Cj0KCQiAuvTJBhCwARIsAL6DemhBrLIRZOtslKm0zwJDIob_kia31Qr-DIt5vopDOQysz03WY4lP_BkaAhA7EALw_wcB&gclsrc=aw.ds&utm_medium=search&utm_source=google#/dados-pessoais
+
+CLIQUE EM PESSOA FISICA:
+//*[contains(concat( " ", @class, " " ), concat( " ", "btn-person", " " ))]
+
+(JURIDICA: //*[contains(concat( " ", @class, " " ), concat( " ", "btn-person-legal", " " ))])
+
+Clicando em pessoa fisica, irá abrir o formulario com os dados de:
+Data nascimento:
+//*[@id="dateOfBirthsBlock"]/input
+CPF:
+//*[@id="cpfsBlock"]/input
+ 
+E-mail
+ //*[@id="personalEmailsBlock"]/input
+Celular
+//*[@id="cellphonesBlock"]/input
+
+Se possui CNH:
+(SIM: /html/body/app-root/div/main/app-flow-c2c/div/app-person-type-c2c/div[2]/div/app-person-type-c2c-pf/form/div/div[6]/div/label[1])
+(NÃO:/html/body/app-root/div/main/app-flow-c2c/div/app-person-type-c2c/div[2]/div/app-person-type-c2c-pf/form/div/div[6]/div/label[2])
+
+Botão de 'Quero simular':
+/html/body/app-root/div/main/app-flow-c2c/div/app-person-type-c2c/div[2]/div/app-person-type-c2c-pf/form/div/div[8]/div/button
+
+
+OBS: Todos esses itens são de formulario dinamico, então estão dentro de SHADOW ROOT COM CERTEZA. Se necessário posso mandar JSPATH de cada um dos itens.
+
+Clicando no botão, ele carrega outra pagina, aguarde 3 segundos, e aparecerá a tela de escolher o tipo do veiculo (CARRO ou MOTO)
+
+Carro:/html/body/app-root/div/main/app-flow-c2c/div/app-select-vehicle-type-c2c/div/div/app-vehicle-type-c2c-btn/div/div/div[1]/button
+
+Moto:/html/body/app-root/div/main/app-flow-c2c/div/app-select-vehicle-type-c2c/div/div/app-vehicle-type-c2c-btn/div/div/div[2]/button
+
+E agora, aparecerá o item na tela de 'Comprar em uma Loja ou Concessionária', que é:
+/html/body/app-root/div/main/app-flow-c2c/div/app-select-vehicle-type-c2c/div/div/app-financing-type-c2c/div/div[2]/button[2]
+
+
+Irá carregar outro formulario de :
+
+Marca
+Selecione a marca do veículo
+(pick list com dezenas de marcas, onde devemos selecionar a marca desejada: 
+//*[@id="brandsBlock"]/ng-select/div/div/div[2]/input)
+
+Selecione o ano e o combustível
+Pick list com o ano://*[@id="yearFuelsBlock"]/ng-select/div/div/div[2]/input
+
+Selecione o modelo
+picklist do modelo://*[@id="modelsBlock"]/ng-select/div/div/div[2]/input
+
+UF de residência
+picklist do Estado:
+//*[@id="ufsBlock"]/ng-select/div/div/div[2]/input
+
+Valor do veiculo (inserir em numero de dinheiro)
+//*[@id="placeholder"]
+ 
+Buscar loja por Nome CEP, cidade ou endereço CNPJ
+(selecionar um dos 3, o que acho mais viavel o CNPJ, para ser mais acertivo)
+CNPJ:
+/html/body/app-root/div/main/app-simulation/app-vehicle-form/div/div/div/div/div[2]/form/div/div[6]/div[2]/label[3]
+ 
+Qual o nome da loja?
+E inserir o CNPJ: //*[@id="autoComplete"]
+
+
+Botão de CONTINUAR:
+/html/body/app-root/div/main/app-simulation/app-vehicle-form/div/div/div/div/div[2]/form/div/div[7]/div[1]/button
+
+Aguardar carregar, pode demorar cerca de 1 a 5 minutos.
+
+Tire um print da tela carregada, para verificar se deu certo.
+
+A PRINCIPIO NÃO TEMOS DADOS EXATOS DE NENHUMA LOJA REAL PARA SIMULAR, então podemos REQUISITAR OS CAMPOS E COLOCAR DADOS FICTICIOS PARA VERIFICAR SE ESTÁ PREENCHENDO CORRETAMENTE. Pode deixar até o processo do playwright NÃO HEADLESS, para que eu visualize se esta indo corretamente o preenchimento no front.

@@ -1,0 +1,155 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// --- Modelos de Dados ---
+
+// Lojas (para suportar multi-tenancy no futuro)
+model Loja {
+  id        String   @id @default(uuid())
+  nome      String
+  cnpj      String?  @unique
+  createdAt DateTime @default(now())
+
+  usuarios   Usuario[]
+  clientes   Cliente[]
+  veiculos   Veiculo[]
+  simulacoes Simulacao[]
+  credenciais CredenciaisInstituicao[]
+}
+
+// Usuários (vendedores, administradores)
+model Usuario {
+  id         String   @id @default(uuid())
+  email      String   @unique
+  senhaHash  String
+  nome       String
+  role       String   @default("vendedor") // "vendedor" | "admin"
+  createdAt  DateTime @default(now())
+
+  lojaId String
+  loja   Loja   @relation(fields: [lojaId], references: [id])
+
+  simulacoes Simulacao[]
+}
+
+// Clientes da loja
+model Cliente {
+  id              String    @id @default(uuid())
+  nomeCompleto    String
+  cpf             String    @unique
+  dataNascimento  DateTime?
+  email           String?
+  celular         String?
+  estadoCivil     String?
+  rendaMensal     Float?
+  tipoVinculo     String?
+  tempoEmprego    String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  lojaId String
+  loja   Loja   @relation(fields: [lojaId], references: [id])
+
+  simulacoes Simulacao[]
+}
+
+// Veículos do estoque da loja
+model Veiculo {
+  id            String    @id @default(uuid())
+  tipo          String // "0km" | "usado"
+  marca         String
+  modelo        String
+  anoFabricacao String
+  valorVeiculo  Float
+  cor           String?
+  placa         String?   @unique
+  km            Int?
+  ativo         Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  lojaId String
+  loja   Loja   @relation(fields: [lojaId], references: [id])
+
+  simulacoes Simulacao[]
+}
+
+// Instituições Financeiras (dados globais)
+model Instituicao {
+  id        String @id
+  nome      String
+  logoUrl   String?
+  portalUrl String?
+  ativo     Boolean @default(true)
+
+  credenciais CredenciaisInstituicao[]
+  resultados   ResultadoSimulacao[]
+}
+
+// Credenciais que cada loja tem para cada instituição
+model CredenciaisInstituicao {
+  id              String  @id @default(uuid())
+  usuario         String?
+  senhaEncrypted  String?
+  ativo           Boolean @default(true)
+
+  lojaId        String
+  loja          Loja   @relation(fields: [lojaId], references: [id])
+  instituicaoId String
+  instituicao   Instituicao @relation(fields: [instituicaoId], references: [id])
+
+  @@unique([lojaId, instituicaoId])
+}
+
+// Simulação principal (agrupa os resultados)
+model Simulacao {
+  id                 String     @id @default(uuid())
+  valorEntrada       Float
+  percentualEntrada  Float
+  prazoDesejado      Int
+  observacoes        String?
+  status             String     @default("pending") // "pending" | "processing" | "completed" | "error"
+  createdAt          DateTime   @default(now())
+  completedAt        DateTime?
+
+  lojaId    String
+  loja      Loja      @relation(fields: [lojaId], references: [id])
+  usuarioId String
+  usuario   Usuario   @relation(fields: [usuarioId], references: [id])
+  clienteId String
+  cliente   Cliente   @relation(fields: [clienteId], references: [id])
+  veiculoId String
+  veiculo   Veiculo   @relation(fields: [veiculoId], references: [id])
+
+  resultados ResultadoSimulacao[]
+}
+
+// Resultado individual de cada instituição para uma simulação
+model ResultadoSimulacao {
+  id              String    @id @default(uuid())
+  status          String // "aprovado" | "reprovado" | "em_analise" | "erro"
+  taxaMes         Float?
+  taxaAno         Float?
+  valorAprovado   Float?
+  entradaMinima   Float?
+  prazoMax        Int?
+  valorParcela    Float?
+  observacoes     String?
+  detalhesParcelas String? // Armazenado como JSON string
+  screenshotUrl   String?
+  createdAt       DateTime  @default(now())
+
+  simulacaoId   String
+  simulacao     Simulacao   @relation(fields: [simulacaoId], references: [id])
+  instituicaoId String
+  instituicao   Instituicao @relation(fields: [instituicaoId], references: [id])
+}
