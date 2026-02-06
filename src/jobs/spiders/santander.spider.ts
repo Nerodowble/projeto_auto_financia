@@ -1,214 +1,132 @@
+import { chromium, Browser, Page } from 'playwright';
+
 /**
  * @file santander.spider.ts
- * @description
- *   Este spider extrai a lista completa de modelos de veículos do portal Santander,
- *   baseando-se em um arquivo JSON preexistente de marcas e anos.
+ * @description Automação completa para extração de todas as combinações de 
+ * parcelas e valores no portal Santander C2C.
  */
-import { chromium, Browser, Locator, Page } from 'playwright';
-import fs from 'fs';
+const executarSimulacaoCompleta = async () => {
+  console.log('--- [INÍCIO] Iniciando Automação Santander ---');
 
-// --- CONSTANTES ---
-const URL_PORTAL = 'https://www.cliente.santanderfinanciamentos.com.br/originacaocliente/?int_source=portalSF&int_medium=c2c&int_campaign=simular-agora#/dados-pessoais';
-const MARCA_ANO_FILE = 'santander_marca_ano.json';
-const RESULTADO_FINAL_FILE = 'santander_modelos.json';
+  const browser: Browser = await chromium.launch({ 
+    headless: false, 
+    slowMo: 100 
+  });
+  
+  const context = await browser.newContext({
+    viewport: { width: 1330, height: 800 }
+  });
 
-const DADOS_FIXOS = {
-  dataNascimento: '21/03/1997',
-  cpf: '401.467.208-57',
-  email: 'fulano.teste@email.com',
-  celular: '11999998888',
-};
-
-// --- INTERFACES ---
-interface MarcaAno {
-    marca: string;
-    ano_modelo: string[];
-}
-
-interface ModelosPorAno {
-    ano_modelo: string;
-    modelos: string[];
-}
-
-interface ResultadoFinal {
-    marca: string;
-    modelos_por_ano: ModelosPorAno[];
-}
-
-// --- FUNÇÕES AUXILIARES ---
-async function extractAllOptionsFromOpenNgselect(page: Page, panelLocator: Locator, maxScrolls = 250): Promise<string[]> {
-    const items = panelLocator.locator('css=.ng-dropdown-panel-items');
-    await items.waitFor({ state: 'visible', timeout: 20000 });
-    const seen = new Set<string>();
-    let stableRounds = 0;
-    for (let i = 0; i < maxScrolls; i++) {
-        const optionLocs = panelLocator.locator('xpath=.//div[@role="option"]');
-        const texts = await optionLocs.allTextContents();
-        let newAny = false;
-        for (const t of texts) {
-            const trimmedText = (t || '').trim();
-            if (trimmedText && !seen.has(trimmedText)) {
-                seen.add(trimmedText);
-                newAny = true;
-            }
-        }
-        if (!newAny) stableRounds++; else stableRounds = 0;
-        if (stableRounds >= 10) break;
-
-        await panelLocator.hover();
-        await page.mouse.wheel(0, 1000);
-        await page.waitForTimeout(500);
-    }
-    return Array.from(seen).sort();
-}
-
-
-/**
- * Função principal do orquestrador.
- */
-const iniciarExtracao = async () => {
-  let browser: Browser | null = null;
-  console.log('--- Iniciando orquestrador do Spider Santander ---');
-
-  if (!fs.existsSync(MARCA_ANO_FILE)) {
-      console.error(`Erro: Arquivo de entrada ${MARCA_ANO_FILE} não encontrado.`);
-      return;
-  }
-  const marcasAnos: MarcaAno[] = JSON.parse(fs.readFileSync(MARCA_ANO_FILE, 'utf-8'));
-
-  if (fs.existsSync(RESULTADO_FINAL_FILE)) {
-    fs.writeFileSync(RESULTADO_FINAL_FILE, '[]', 'utf-8');
-    console.log('Arquivo de resultado anterior limpo.');
-  }
+  const page: Page = await context.newPage();
 
   try {
-    browser = await chromium.launch({ headless: false, slowMo: 40 });
-    const page = await browser.newPage();
-    page.setDefaultTimeout(45000); // Timeout um pouco maior
+    // 1. ACESSO E DADOS PESSOAIS
+    console.log('=> [1/9] Abrindo portal...');
+    await page.goto('https://www.cliente.santanderfinanciamentos.com.br/originacaocliente/?int_source=portalSF&int_medium=c2c&int_campaign=simular-agora#/dados-pessoais', { 
+      waitUntil: 'networkidle' 
+    });
 
-    // Navegação e preenchimento do formulário inicial
-    await page.goto(URL_PORTAL, { waitUntil: 'domcontentloaded', timeout: 60000 });
-    await page.waitForTimeout(800);
+    console.log('=> [2/9] Preenchendo dados pessoais...');
+    await page.locator('.btn-person').click();
+    await page.locator('#dateOfBirthsBlock input').fill('21/03/1997');
+    await page.locator('#cpfsBlock input').fill('401.467.208-57');
+    await page.locator('#personalEmailsBlock input').fill('willianvidallima@outlook.com');
+    await page.locator('#cellphonesBlock input').fill('11973297563');
+    await page.locator('.btn-simulate').click();
+
+    // 2. SELEÇÃO DO VEÍCULO
+    console.log('=> [3/9] Selecionando tipo "Veículo"...');
+    await page.locator('.btn-vehicle').waitFor({ state: 'visible' });
+    await page.locator('.btn-vehicle').click();
+
+    console.log('=> [4/9] Preenchendo Marca e Ano/Modelo...');
+    await page.locator('.vehicle-brand input').fill('FIAT');
+    await page.locator('ng-dropdown-panel .ng-option').first().click();
     
-    for (let i = 0; i < 3; i++) {
-        try {
-            await page.locator('xpath=//button[contains(@class,"btn-person") and contains(normalize-space(.),"Pessoa Física")]').click({ timeout: 10000 });
-            const dateOfBirthInput = page.locator('xpath=//*[@id="dateOfBirthsBlock"]/input');
-            await dateOfBirthInput.waitFor({ state: 'visible', timeout: 15000 });
-            await dateOfBirthInput.fill(DADOS_FIXOS.dataNascimento);
-            break; 
-        } catch (e) {
-            console.log(`Tentativa ${i + 1} falhou. Recarregando a página...`);
-            if (i < 2) await page.reload({ waitUntil: 'domcontentloaded' });
-            else throw e;
-        }
-    }
-    await page.locator('xpath=//*[@id="cpfsBlock"]/input').fill(DADOS_FIXOS.cpf);
-    await page.locator('xpath=//*[@id="personalEmailsBlock"]/input').fill(DADOS_FIXOS.email);
-    await page.locator('xpath=//*[@id="cellphonesBlock"]/input').fill(DADOS_FIXOS.celular);
-    await page.waitForTimeout(400);
-    await page.locator('xpath=/html/body/app-root/div/main/app-flow-c2c/div/app-person-type-c2c/div[2]/div/app-person-type-c2c-pf/form/div/div[6]/div/label[1]').click();
-    await page.locator('xpath=/html/body/app-root/div/main/app-flow-c2c/div/app-person-type-c2c/div[2]/div/app-person-type-c2c-pf/form/div/div[8]/div/button').click();
-    await page.waitForTimeout(3000);
-    await page.locator('xpath=/html/body/app-root/div/main/app-flow-c2c/div/app-select-vehicle-type-c2c/div/div/app-vehicle-type-c2c-btn/div/div/div[1]/button').click();
-    await page.waitForTimeout(800);
-    if (await page.locator('xpath=//app-financing-type-c2c').isVisible()) {
-      await page.locator('xpath=(//app-financing-type-c2c//button)[2]').click();
-    }
-    await page.locator('xpath=//*[@id="brandsBlock"]').waitFor({ state: 'visible', timeout: 30000 });
+    await page.locator('.vehicle-yearModel input').fill('2026 DIESEL');
+    await page.locator('ng-dropdown-panel .ng-option').first().click();
 
+    console.log('=> [5/9] Selecionando Modelo e UF...');
+    await page.locator('#modelsBlock ng-select input[type=text]').click();
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('Enter');
 
-    // Inicia o processamento
-    for (const [index, item] of marcasAnos.entries()) {
-      console.log(`\n--- [${index + 1}/${marcasAnos.length}] Processando marca: ${item.marca} ---`);
-      try {
-        await processarMarca(page, item);
-      } catch (error) {
-        console.error(`Erro fatal ao processar a marca "${item.marca}":`, error);
-      }
+    await page.locator('#ufsBlock ng-select input[type=text]').fill('Sao Paulo');
+    await page.keyboard.press('Enter');
+
+    // 3. VALOR DO VEÍCULO E ENTRADA
+    console.log('=> [6/9] Preenchendo Valor do Veículo...');
+    const valorVeiculo = page.locator('#valor-veiculo');
+    await valorVeiculo.click();
+    await valorVeiculo.pressSequentially('5000000', { delay: 50 }); // R$ 50.000,00
+    await page.locator('.btn-simulate').click();
+
+    console.log('=> [7/9] Tela de resultados: Definindo Entrada...');
+    const entradaInput = page.locator('input[name="valor-entrada"]');
+    await entradaInput.waitFor({ state: 'visible', timeout: 30000 });
+    await entradaInput.click();
+    await entradaInput.fill('');
+    await entradaInput.pressSequentially('4000000', { delay: 50 }); // R$ 40.000,00
+    await page.keyboard.press('Tab');
+
+    // 4. LOOP DE PARCELAS (PICKLIST)
+    console.log('=> [8/9] Iniciando varredura do Picklist de Parcelas...');
+    await page.waitForTimeout(2000);
+
+    const dropdownTermos = page.locator('#terms');
+    
+    // Abrimos uma vez para contar as opções
+    await dropdownTermos.click();
+    const opcoes = page.locator('ng-dropdown-panel .ng-option');
+    await opcoes.first().waitFor();
+    const totalOpcoes = await opcoes.count();
+    console.log(`=> Detectadas ${totalOpcoes} opções de prazos.`);
+    
+    // Clica fora para fechar antes de iniciar o loop organizado
+    await page.mouse.click(0, 0);
+
+    const resultados: string[] = [];
+
+    for (let i = 0; i < totalOpcoes; i++) {
+      console.log(`   -> Processando opção ${i + 1} de ${totalOpcoes}...`);
+      
+      // Abre o dropdown
+      await dropdownTermos.click();
+      
+      // Pega o texto da opção antes de clicar (ex: "48")
+      const opcaoTexto = await opcoes.nth(i).innerText();
+      
+      // Clica na opção
+      await opcoes.nth(i).click();
+      
+      // Aguarda o recálculo (o valor da parcela muda na tela)
+      await page.waitForTimeout(1500); 
+      
+      // Captura o valor resultante
+      const valorParcela = await page.locator('#installmentValue').innerText();
+      
+      const linha = `${opcaoTexto.trim()}x de ${valorParcela.trim()}`;
+      resultados.push(linha);
+      console.log(`      Resultado: ${linha}`);
     }
+
+    // 5. LOG FINAL
+    console.log('\n=========================================');
+    console.log('✔ RESUMO DA SIMULAÇÃO FINALIZADO');
+    console.log('Valor da Entrada: R$ 40.000,00');
+    console.log('Resultados Extraídos:');
+    resultados.forEach(res => console.log(` - ${res}`));
+    console.log('=========================================\n');
 
   } catch (error) {
-    console.error('Erro geral no processo de extração:', error);
+    console.error('\n❌ ERRO DURANTE A EXECUÇÃO:');
+    console.error(error instanceof Error ? error.message : error);
   } finally {
-    if (browser) await browser.close();
-    console.log(`\nProcesso de extração concluído.`);
-    console.log(`Verifique o arquivo: ${RESULTADO_FINAL_FILE}`);
+    console.log('=> Encerrando navegador...');
+    await page.waitForTimeout(2000);
+    await browser.close();
+    console.log('--- [FIM] ---');
   }
 };
 
-/**
- * Processa uma única marca, iterando por seus anos para extrair os modelos.
- */
-async function processarMarca(page: Page, item: MarcaAno) {
-    const { marca, ano_modelo } = item;
-    const brandDropdown = page.locator('xpath=//*[@id="brandsBlock"]/ng-select');
-    const anoDropdown = page.locator('xpath=//*[@id="yearFuelsBlock"]/ng-select');
-
-    // 1. Seleciona a marca
-    await brandDropdown.click();
-    await brandDropdown.locator('input').fill(marca);
-    await page.waitForTimeout(400);
-    await page.locator(`xpath=//div[@role="option" and .//span[normalize-space()="${marca}"]]`).first().click();
-    await page.waitForTimeout(1000);
-
-    const dadosMarca: ResultadoFinal = {
-        marca: marca,
-        modelos_por_ano: []
-    };
-
-    // 2. Itera por cada ano/modelo
-    for (const ano of ano_modelo) {
-        try {
-            console.log(`   Processando ano: ${ano}`);
-            // Seleciona o ano
-            await anoDropdown.click();
-            await anoDropdown.locator('input').fill(ano);
-            await page.waitForTimeout(400);
-            await page.locator(`xpath=//div[@role="option" and .//span[normalize-space()="${ano}"]]`).first().click();
-            await page.waitForTimeout(1000);
-
-            // Extrai os modelos
-            const modeloDropdown = page.locator('xpath=//*[@id="modelsBlock"]/ng-select');
-            await modeloDropdown.click();
-            await page.waitForTimeout(500);
-            const modeloPanel = page.locator("css=ng-dropdown-panel").last();
-            const modelos = await extractAllOptionsFromOpenNgselect(page, modeloPanel, 300);
-            console.log(`      -> ${modelos.length} modelos encontrados.`);
-            
-            dadosMarca.modelos_por_ano.push({ ano_modelo: ano, modelos: modelos });
-            
-            // Limpa a seleção do ano para a próxima iteração
-            await page.locator('body').click({ position: { x: 5, y: 5 } }); // Clica fora para fechar
-            const clearAnoButton = anoDropdown.locator('span.ng-clear-wrapper');
-             if (await clearAnoButton.isVisible()) {
-                await clearAnoButton.click();
-                await page.waitForTimeout(500);
-            }
-
-        } catch (error) {
-            console.error(`      Erro ao processar o ano "${ano}" para a marca "${marca}". Pulando para o próximo.`, error);
-             await page.locator('body').click({ position: { x: 5, y: 5 } }); // Tenta fechar dropdowns abertos
-        }
-    }
-    
-    // 3. Salva o resultado consolidado da marca
-    let resultadosFinais: ResultadoFinal[] = [];
-    if (fs.existsSync(RESULTADO_FINAL_FILE)) {
-        const fileContent = fs.readFileSync(RESULTADO_FINAL_FILE, 'utf-8');
-        if(fileContent) resultadosFinais = JSON.parse(fileContent);
-    }
-    resultadosFinais.push(dadosMarca);
-    fs.writeFileSync(RESULTADO_FINAL_FILE, JSON.stringify(resultadosFinais, null, 2), { encoding: 'utf-8' });
-    console.log(`✔ Dados de ${marca} salvos em ${RESULTADO_FINAL_FILE}`);
-
-    // 4. Limpa a seleção da marca para a próxima iteração
-    const clearBrandButton = brandDropdown.locator('span.ng-clear-wrapper');
-    if (await clearBrandButton.isVisible()) {
-        await clearBrandButton.click();
-        await page.waitForTimeout(500);
-    }
-}
-
-
-iniciarExtracao();
+executarSimulacaoCompleta();
